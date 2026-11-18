@@ -1,0 +1,270 @@
+# Credit Card Fraud Detection
+# Logistic Regression and Random Forest
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (accuracy_score,precision_score,recall_score,f1_score,confusion_matrix,classification_report,roc_auc_score,roc_curve)
+
+# STEP 1: LOAD DATASET
+
+data = pd.read_csv(r'C:\Narendra\creditcard.csv')
+
+print("Dataset Shape:")
+print(data.shape)
+
+print("\nFirst 5 rows:")
+print(data.head())
+
+
+# STEP 2: CHECK MISSING VALUES
+
+print("\nMissing Values:")
+print(data.isnull().sum())
+
+# STEP 3: CHECK CLASS DISTRIBUTION
+
+print("\nClass Distribution:")
+print(data["Class"].value_counts())
+
+# Plot class distribution
+plt.figure(figsize=(6, 4))
+sns.countplot(x="Class", data=data)
+plt.title("Transaction Class Distribution")
+plt.xlabel("Class (0 = Legitimate, 1 = Fraud)")
+plt.ylabel("Number of Transactions")
+plt.show()
+
+# STEP 4: SEPARATE FEATURES AND TARGET
+
+X = data.drop("Class", axis=1)
+y = data["Class"]
+
+# STEP 5: SCALE FEATURES
+
+scaler = StandardScaler()
+
+X["Time"] = scaler.fit_transform(X[["Time"]])
+X["Amount"] = scaler.fit_transform(X[["Amount"]])
+
+# STEP 6: TRAIN-TEST SPLIT
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.20,
+    random_state=42,
+    stratify=y
+)
+
+print("\nTraining Data:", X_train.shape)
+print("Testing Data:", X_test.shape)
+
+# STEP 7: LOGISTIC REGRESSION
+
+logistic_model = LogisticRegression(
+    max_iter=1000,
+    class_weight="balanced",
+    random_state=42
+)
+
+logistic_model.fit(X_train, y_train)
+
+# Predictions
+y_pred_lr = logistic_model.predict(X_test)
+y_prob_lr = logistic_model.predict_proba(X_test)[:, 1]
+
+# STEP 8: RANDOM FOREST
+
+rf_model = RandomForestClassifier(
+    n_estimators=100,
+    random_state=42,
+    class_weight="balanced",
+    n_jobs=-1
+)
+
+rf_model.fit(X_train, y_train)
+
+# Predictions
+y_pred_rf = rf_model.predict(X_test)
+y_prob_rf = rf_model.predict_proba(X_test)[:, 1]
+
+# STEP 9: EVALUATION FUNCTION
+
+def evaluate_model(name, y_test, y_pred, y_prob):
+
+    print("\n====================================")
+    print(name)
+    print("====================================")
+
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, zero_division=0)
+    recall = recall_score(y_test, y_pred, zero_division=0)
+    f1 = f1_score(y_test, y_pred, zero_division=0)
+    roc_auc = roc_auc_score(y_test, y_prob)
+
+    print("Accuracy :", accuracy)
+    print("Precision:", precision)
+    print("Recall   :", recall)
+    print("F1 Score :", f1)
+    print("ROC-AUC  :", roc_auc)
+
+    print("\nClassification Report:")
+    print(classification_report(
+        y_test,
+        y_pred,
+        target_names=["Legitimate", "Fraud"],
+        zero_division=0
+    ))
+
+    # Confusion Matrix
+    cm = confusion_matrix(y_test, y_pred)
+
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=["Legitimate", "Fraud"],
+        yticklabels=["Legitimate", "Fraud"]
+    )
+
+    plt.title(name + " - Confusion Matrix")
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.show()
+
+    return accuracy, precision, recall, f1, roc_auc
+
+
+# STEP 10: EVALUATE LOGISTIC REGRESSION
+
+lr_results = evaluate_model(
+    "Logistic Regression",
+    y_test,
+    y_pred_lr,
+    y_prob_lr
+)
+
+
+# STEP 11: EVALUATE RANDOM FOREST
+
+rf_results = evaluate_model(
+    "Random Forest",
+    y_test,
+    y_pred_rf,
+    y_prob_rf
+)
+
+
+# STEP 12: COMPARE MODELS
+
+comparison = pd.DataFrame({
+    "Metric": [
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "F1 Score",
+        "ROC-AUC"
+    ],
+
+    "Logistic Regression": lr_results,
+
+    "Random Forest": rf_results
+})
+
+print("\n====================================")
+print("MODEL COMPARISON")
+print("====================================")
+
+print(comparison)
+
+# STEP 13: ROC CURVE
+
+fpr_lr, tpr_lr, _ = roc_curve(y_test, y_prob_lr)
+fpr_rf, tpr_rf, _ = roc_curve(y_test, y_prob_rf)
+
+plt.figure(figsize=(8, 6))
+
+plt.plot(
+    fpr_lr,
+    tpr_lr,
+    label="Logistic Regression"
+)
+
+plt.plot(
+    fpr_rf,
+    tpr_rf,
+    label="Random Forest"
+)
+
+plt.plot(
+    [0, 1],
+    [0, 1],
+    linestyle="--",
+    label="Random Classifier"
+)
+
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+
+plt.title("ROC Curve")
+
+plt.legend()
+
+plt.show()
+
+
+# STEP 14: FEATURE IMPORTANCE
+
+importance = pd.Series(
+    rf_model.feature_importances_,
+    index=X.columns
+)
+
+importance = importance.sort_values(
+    ascending=False
+).head(15)
+
+plt.figure(figsize=(10, 6))
+
+importance.plot(kind="bar")
+
+plt.title("Top 15 Important Features - Random Forest")
+
+plt.xlabel("Features")
+plt.ylabel("Importance")
+
+plt.xticks(rotation=45)
+
+plt.tight_layout()
+
+plt.show()
+
+# STEP 15: PREDICT A TRANSACTION
+
+# Example: predict first test transaction
+
+sample = X_test.iloc[[0]]
+
+prediction = rf_model.predict(sample)[0]
+
+probability = rf_model.predict_proba(sample)[0][1]
+
+print("\n====================================")
+print("TRANSACTION PREDICTION")
+print("====================================")
+
+if prediction == 1:
+    print("Result: FRAUDULENT TRANSACTION")
+else:
+    print("Result: LEGITIMATE TRANSACTION")
+
+print("Fraud Probability:", probability)
